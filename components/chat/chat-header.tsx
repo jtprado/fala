@@ -1,86 +1,106 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Edit2, Save } from "lucide-react";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
 import { Database } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/components/ui/use-toast";
+import { useChat } from "@/lib/hooks/use-chat";
 
 type Session = Database['public']['Tables']['sessions']['Row'];
 
 interface ChatHeaderProps {
-  session: Session;
-  onUpdate: (updates: { title?: string; language?: string; level?: string }) => Promise<void>;
+  sessionId: string;
+  onUpdateSession: (sessionId: string, updates: Partial<Session>) => void;
 }
 
-export function ChatHeader({ session, onUpdate }: ChatHeaderProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(session.title);
+export function ChatHeader({ sessionId, onUpdateSession }: ChatHeaderProps) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const supabase = createClientComponentClient<Database>();
+  const { createSession } = useChat();
 
-  const handleSave = async () => {
-    await onUpdate({ title });
-    setIsEditing(false);
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      router.push('/sign-in');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleArchiveChat = async () => {
+    try {
+      await onUpdateSession(sessionId, { status: 'archived' });
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to archive chat",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleNewChat = async () => {
+    try {
+      // Create a new session with default values
+      const newSessionId = await createSession('en', 'beginner');
+      if (newSessionId) {
+        router.refresh();
+        router.push(`/c/${newSessionId}`);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create new chat",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
-    <div className="flex items-center justify-between border-b p-4">
-      <div className="flex items-center gap-4">
-        {isEditing ? (
-          <div className="flex items-center gap-2">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-[200px]"
-            />
-            <Button size="icon" onClick={handleSave}>
-              <Save className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">{session.title}</h2>
-            <Button size="icon" variant="ghost" onClick={() => setIsEditing(true)}>
-              <Edit2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+    <header className="border-b p-4 bg-background">
+      <div className="flex items-center justify-between max-w-screen-xl mx-auto">
+        <h1 className="text-lg font-semibold">Language Learning Chat</h1>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNewChat}
+          >
+            New Chat
+          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                Menu
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleArchiveChat}>
+                Archive Chat
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut}>
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-      <div className="flex items-center gap-4">
-        <Select
-          value={session.language}
-          onValueChange={(value) => onUpdate({ language: value })}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Language" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="en">English</SelectItem>
-            <SelectItem value="es">Spanish</SelectItem>
-            <SelectItem value="fr">French</SelectItem>
-            <SelectItem value="de">German</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={session.level}
-          onValueChange={(value) => onUpdate({ level: value })}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Level" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="beginner">Beginner</SelectItem>
-            <SelectItem value="intermediate">Intermediate</SelectItem>
-            <SelectItem value="advanced">Advanced</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
+    </header>
   );
 }

@@ -1,19 +1,46 @@
-"use client";
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { ChatInterface } from '@/components/chat/chat-interface';
 
-import { useEffect } from "react";
-import { useParams } from "next/navigation";
-import { ChatInterface } from "@/components/chat/chat-interface";
-import { useChat } from "@/lib/hooks/use-chat";
+export const dynamic = 'force-dynamic';
 
-export default function ChatSession() {
-  const { sessionId } = useParams();
-  const { setCurrentSessionId } = useChat();
+interface ChatPageProps {
+  params: {
+    sessionId: string;
+  };
+}
 
-  useEffect(() => {
-    if (sessionId) {
-      setCurrentSessionId(sessionId as string);
-    }
-  }, [sessionId, setCurrentSessionId]);
+export default async function ChatPage({ params }: ChatPageProps) {
+  const supabase = createServerComponentClient({ cookies });
+  const sessionId = params.sessionId;
 
-  return <ChatInterface />;
+  if (!sessionId) {
+    redirect('/');
+  }
+  
+  // Use getUser instead of getSession for security
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    redirect('/sign-in');
+  }
+
+  // Verify the chat session exists and belongs to the user
+  const { data: chatSession, error: sessionError } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (sessionError || !chatSession) {
+    redirect('/');
+  }
+
+  return (
+    <div className="flex h-screen">
+      <ChatInterface sessionId={sessionId} />
+    </div>
+  );
 }

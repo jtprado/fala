@@ -1,62 +1,76 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useUser } from "@supabase/auth-helpers-react";
-import { Avatar } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2 } from "lucide-react";
-import { useChat } from "@/lib/hooks/use-chat";
+import { Database } from "@/lib/supabase/client";
+
+type Message = Database['public']['Tables']['messages']['Row'];
 
 interface ChatMessagesProps {
-  sessionId: string;
+  messages: Message[];
+  isLoading: boolean;
 }
 
-export function ChatMessages({ sessionId }: ChatMessagesProps) {
-  const { user } = useUser();
+export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages } = useChat(sessionId);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  if (!messages) {
+  if (isLoading) {
+    return <div className="flex-1 flex items-center justify-center">Loading messages...</div>;
+  }
+
+  if (!messages.length) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        No messages yet. Start a conversation!
       </div>
     );
   }
 
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4">
-        {messages.map((message) => (
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {messages.map((message) => (
+        <div
+          key={message.id}
+          className={`flex ${
+            message.type === 'system' 
+              ? 'justify-center' 
+              : message.user_id === 'assistant' 
+                ? 'justify-start' 
+                : 'justify-end'
+          }`}
+        >
           <div
-            key={message.id}
-            className={`flex items-start gap-4 ${
-              message.user_id === user?.id ? "flex-row-reverse" : ""
+            className={`max-w-[80%] rounded-lg p-4 ${
+              message.type === 'system'
+                ? 'bg-muted text-muted-foreground'
+                : message.user_id === 'assistant'
+                ? 'bg-primary/10 text-primary-foreground'
+                : 'bg-primary text-primary-foreground'
             }`}
           >
-            <Avatar />
-            <div
-              className={`rounded-lg p-4 ${
-                message.user_id === user?.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted"
-              }`}
-            >
-              <p>{message.content}</p>
-              {message.translation && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {message.translation}
-                </p>
-              )}
-            </div>
+            <p className="text-sm whitespace-pre-wrap break-words">
+              {message.content}
+            </p>
+            {message.translation && (
+              <p className="text-xs opacity-75 mt-1">
+                {message.translation}
+              </p>
+            )}
+            {message.feedback && (
+              <div className="text-xs opacity-75 mt-2 space-y-1">
+                <p>Pronunciation: {message.feedback.pronunciation}</p>
+                <p>Accuracy: {message.feedback.accuracy}</p>
+                <p>Fluency: {message.feedback.fluency}</p>
+                <p>Completeness: {message.feedback.completeness}</p>
+              </div>
+            )}
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-    </ScrollArea>
+        </div>
+      ))}
+      <div ref={messagesEndRef} />
+    </div>
   );
 }

@@ -1,112 +1,50 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { useState, useCallback, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send } from "lucide-react";
-import { SpeechControls } from "./speech-controls";
-import { useSpeechRecognition } from "@/lib/hooks/use-speech-recognition";
-import { ScoreDisplay } from "./score-display";
-import { Database } from "@/lib/supabase/client";
+import { MessageType } from "@/lib/supabase/client";
 
 interface ChatInputProps {
-  sessionId: string;
-  currentPhrase?: string;
-  language?: string;
+  onSendMessage: (content: string, type: string) => void;
+  isDisabled?: boolean;
 }
 
-export function ChatInput({ sessionId, currentPhrase, language = "en-US" }: ChatInputProps) {
+export function ChatInput({ onSendMessage, isDisabled }: ChatInputProps) {
   const [message, setMessage] = useState("");
-  const [showScores, setShowScores] = useState(false);
-  const [scores, setScores] = useState<any>(null);
-  
-  const supabase = createClientComponentClient<Database>();
 
-  const sendMessage = async (content: string) => {
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          session_id: sessionId,
-          content,
-          type: 'text'
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error("Failed to send message:", error);
-    }
-  };
-
-  const {
-    isRecording,
-    startRecording,
-    stopRecording,
-    results,
-  } = useSpeechRecognition(language, currentPhrase || "");
-
-  const handleSend = async () => {
-    if (!message.trim()) return;
-    
-    try {
-      await sendMessage(message);
+  const handleSend = useCallback(() => {
+    if (message.trim() && !isDisabled) {
+      onSendMessage(message.trim(), MessageType.TEXT);
       setMessage("");
-    } catch (error) {
-      console.error("Failed to send message:", error);
     }
-  };
+  }, [message, onSendMessage, isDisabled]);
 
-  const handleStopRecording = useCallback(() => {
-    stopRecording();
-    if (results.length > 0) {
-      const latestResult = results[results.length - 1];
-      if (latestResult.NBest && latestResult.NBest.length > 0) {
-        const scores = {
-          accuracyScore: latestResult.NBest[0].PronunciationAssessment.AccuracyScore,
-          fluencyScore: latestResult.NBest[0].PronunciationAssessment.FluencyScore,
-          completenessScore: latestResult.NBest[0].PronunciationAssessment.CompletenessScore,
-          prosodyScore: latestResult.NBest[0].PronunciationAssessment.ProsodyScore,
-          pronunciationScore: latestResult.NBest[0].PronunciationAssessment.PronScore,
-        };
-        setScores(scores);
-        setShowScores(true);
-      }
+  const handleKeyPress = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
-  }, [results, stopRecording]);
+  }, [handleSend]);
 
   return (
-    <div className="border-t p-4 space-y-4">
-      {showScores && scores && (
-        <ScoreDisplay scores={scores} />
-      )}
-      <div className="flex gap-4">
+    <div className="border-t p-4 bg-background">
+      <div className="flex gap-2">
         <Textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
+          onKeyDown={handleKeyPress}
           placeholder="Type your message..."
-          className="min-h-[60px]"
+          className="flex-1 min-h-[60px] max-h-[180px]"
+          disabled={isDisabled}
         />
-        <div className="flex flex-col gap-2">
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={!message.trim()}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-          <SpeechControls
-            isRecording={isRecording}
-            onStartRecording={startRecording}
-            onStopRecording={handleStopRecording}
-          />
-        </div>
+        <Button 
+          onClick={handleSend}
+          disabled={!message.trim() || isDisabled}
+          className="self-end"
+        >
+          Send
+        </Button>
       </div>
     </div>
   );

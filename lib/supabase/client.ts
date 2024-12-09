@@ -85,3 +85,15 @@ export type Database = {
     };
   };
 };
+
+export const MessageType = {
+  TEXT: 'text',
+  AUDIO: 'audio',
+  SYSTEM: 'system'
+} as const;
+
+export const SessionStatus = {
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+  DELETED: 'deleted'
+} as const;
