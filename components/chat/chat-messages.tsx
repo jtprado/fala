@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Database } from "@/lib/supabase/client";
-
-type Message = Database['public']['Tables']['messages']['Row'];
+import { Message } from "@/lib/types";
+import { ScoreDisplay } from "./score-display";
 
 interface ChatMessagesProps {
-  messages: Message[];
+  messages: (Message & {
+    message_feedback?: {
+      pronunciation_score: number;
+      accuracy_score: number;
+      fluency_score: number;
+      completeness_score: number;
+    } | null;
+  })[];
   isLoading: boolean;
 }
 
@@ -59,12 +65,9 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
                 {message.translation}
               </p>
             )}
-            {message.feedback && (
-              <div className="text-xs opacity-75 mt-2 space-y-1">
-                <p>Pronunciation: {message.feedback.pronunciation}</p>
-                <p>Accuracy: {message.feedback.accuracy}</p>
-                <p>Fluency: {message.feedback.fluency}</p>
-                <p>Completeness: {message.feedback.completeness}</p>
+            {message.message_feedback && (
+              <div className="mt-4">
+                <ScoreDisplay feedback={message.message_feedback} />
               </div>
             )}
           </div>

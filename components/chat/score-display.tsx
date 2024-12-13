@@ -8,18 +8,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import type { MessageFeedback } from "@/lib/types";
 
-interface ScoreDisplayProps {
-  scores: {
-    accuracyScore: number;
-    fluencyScore: number;
-    completenessScore: number;
-    prosodyScore: number;
-    pronunciationScore: number;
-  };
+type ScoreDisplayProps = {
+  feedback: Pick<MessageFeedback, 
+    'pronunciation_score' | 
+    'accuracy_score' | 
+    'fluency_score' | 
+    'completeness_score'
+  >;
 }
 
-export function ScoreDisplay({ scores }: ScoreDisplayProps) {
+export function ScoreDisplay({ feedback }: ScoreDisplayProps) {
   return (
     <Card className="w-full">
       <CardHeader>
@@ -30,37 +30,30 @@ export function ScoreDisplay({ scores }: ScoreDisplayProps) {
         <div className="space-y-2">
           <div className="flex justify-between">
             <span>Accuracy</span>
-            <span>{Math.round(scores.accuracyScore)}%</span>
+            <span>{Math.round(feedback.accuracy_score)}%</span>
           </div>
-          <Progress value={scores.accuracyScore} />
+          <Progress value={feedback.accuracy_score} />
         </div>
         <div className="space-y-2">
           <div className="flex justify-between">
             <span>Fluency</span>
-            <span>{Math.round(scores.fluencyScore)}%</span>
+            <span>{Math.round(feedback.fluency_score)}%</span>
           </div>
-          <Progress value={scores.fluencyScore} />
+          <Progress value={feedback.fluency_score} />
         </div>
         <div className="space-y-2">
           <div className="flex justify-between">
             <span>Completeness</span>
-            <span>{Math.round(scores.completenessScore)}%</span>
+            <span>{Math.round(feedback.completeness_score)}%</span>
           </div>
-          <Progress value={scores.completenessScore} />
-        </div>
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <span>Prosody</span>
-            <span>{Math.round(scores.prosodyScore)}%</span>
-          </div>
-          <Progress value={scores.prosodyScore} />
+          <Progress value={feedback.completeness_score} />
         </div>
         <div className="space-y-2">
           <div className="flex justify-between">
             <span>Overall Pronunciation</span>
-            <span>{Math.round(scores.pronunciationScore)}%</span>
+            <span>{Math.round(feedback.pronunciation_score)}%</span>
           </div>
-          <Progress value={scores.pronunciationScore} />
+          <Progress value={feedback.pronunciation_score} />
         </div>
       </CardContent>
     </Card>

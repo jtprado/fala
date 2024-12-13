@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 import { createSpeechRecognizer, createPronunciationAssessmentConfig } from '../utils/azure-speech-client';
+import type { MessageFeedback } from '@/lib/types';
 
 interface SpeechResult {
   NBest: Array<{
@@ -24,6 +25,13 @@ interface SpeechResult {
     };
   }>;
 }
+
+type SpeechFeedback = Pick<MessageFeedback, 
+  'pronunciation_score' | 
+  'accuracy_score' | 
+  'fluency_score' | 
+  'completeness_score'
+>;
 
 export function useSpeechRecognition(language: string, referenceText: string) {
   const [isRecording, setIsRecording] = useState(false);
@@ -77,11 +85,28 @@ export function useSpeechRecognition(language: string, referenceText: string) {
     }
   }, []);
 
+  const getFeedback = useCallback((): SpeechFeedback | null => {
+    if (resultsRef.current.length === 0) return null;
+
+    // Get the best result (first NBest entry of the last result)
+    const lastResult = resultsRef.current[resultsRef.current.length - 1];
+    const bestResult = lastResult.NBest[0];
+
+    if (!bestResult?.PronunciationAssessment) return null;
+
+    return {
+      pronunciation_score: bestResult.PronunciationAssessment.PronScore,
+      accuracy_score: bestResult.PronunciationAssessment.AccuracyScore,
+      fluency_score: bestResult.PronunciationAssessment.FluencyScore,
+      completeness_score: bestResult.PronunciationAssessment.CompletenessScore
+    };
+  }, []);
+
   return {
     isRecording,
     error,
     startRecording,
     stopRecording,
-    results: resultsRef.current,
+    getFeedback,
   };
 }

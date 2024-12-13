@@ -4,10 +4,10 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from "@/lib/supabase/client";
-
-type Session = Database['public']['Tables']['sessions']['Row'];
-type Message = Database['public']['Tables']['messages']['Row'];
+import type { Message, Session, MessageType } from "@/lib/types";
+import { sessionsDAL } from "@/lib/db/sessions";
+import { messagesDAL } from "@/lib/db/messages";
+import type { CreateMessageInput } from "@/lib/db/messages";
 
 export function useChat(sessionId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -16,7 +16,7 @@ export function useChat(sessionId?: string) {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClientComponentClient();
 
   // Fetch messages for current session
   useEffect(() => {
@@ -24,14 +24,8 @@ export function useChat(sessionId?: string) {
 
     const fetchMessages = async () => {
       try {
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('session_id', currentSessionId)
-          .order('sequence_number', { ascending: true });
-
-        if (error) throw error;
-        setMessages(data || []);
+        const messages = await messagesDAL.list(currentSessionId);
+        setMessages(messages);
       } catch (error) {
         console.error('Error fetching messages:', error);
         toast({
@@ -44,21 +38,17 @@ export function useChat(sessionId?: string) {
 
     fetchMessages();
 
-    // Subscribe to new messages
+    // Subscribe to new messages and feedback changes
     const channel = supabase
       .channel(`messages:${currentSessionId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'messages',
         filter: `session_id=eq.${currentSessionId}`
-      }, (payload) => {
-        setMessages(current => {
-          // Check if message already exists to prevent duplicates
-          const exists = current.some(msg => msg.id === payload.new.id);
-          if (exists) return current;
-          return [...current, payload.new as Message];
-        });
+      }, () => {
+        // Refetch messages to get latest with feedback
+        fetchMessages();
       })
       .subscribe();
 
@@ -79,14 +69,8 @@ export function useChat(sessionId?: string) {
           return;
         }
 
-        const { data, error } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('last_accessed_at', { ascending: false });
-
-        if (error) throw error;
-        setSessions(data || []);
+        const sessions = await sessionsDAL.list(user.id);
+        setSessions(sessions);
       } catch (error) {
         console.error('Error fetching sessions:', error);
         toast({
@@ -119,8 +103,8 @@ export function useChat(sessionId?: string) {
 
   const sendMessage = useCallback(async (
     content: string,
-    type: string = 'text',
-    feedback?: Message['feedback']
+    type: MessageType = 'text',
+    feedback?: CreateMessageInput['feedback']
   ) => {
     if (!currentSessionId) return;
 
@@ -133,26 +117,11 @@ export function useChat(sessionId?: string) {
         return;
       }
 
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          session_id: currentSessionId,
-          user_id: user.id,
-          content,
-          type,
-          feedback
-        });
-
-      if (messageError) throw messageError;
-
-      await supabase
-        .from('sessions')
-        .update({
-          last_message_at: new Date().toISOString(),
-          last_accessed_at: new Date().toISOString()
-        })
-        .eq('id', currentSessionId);
-
+      await messagesDAL.create(currentSessionId, user.id, {
+        content,
+        type,
+        feedback
+      });
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -163,7 +132,7 @@ export function useChat(sessionId?: string) {
     }
   }, [currentSessionId, supabase, router, toast]);
 
-  const createSession = useCallback(async (language?: string, level?: string) => {
+  const createSession = useCallback(async (language?: Session['language'], level?: Session['level']) => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -173,25 +142,16 @@ export function useChat(sessionId?: string) {
         return;
       }
 
-      const { data: session, error } = await supabase
-        .from('sessions')
-        .insert({
-          user_id: user.id,
-          language: language || 'en',
-          level: level || 'beginner',
-          title: 'New Chat Session',
-          status: 'active'
-        })
-        .select()
-        .single();
+      const session = await sessionsDAL.create(user.id, {
+        language: language || 'en',
+        level: level || 'beginner',
+        title: 'New Chat Session',
+        status: 'active'
+      });
 
-      if (error) throw error;
-
-      // Update local state
       setSessions(prev => [session, ...prev]);
       setCurrentSessionId(session.id);
       
-      // Navigate to new session
       router.push(`/c/${session.id}`);
       return session.id;
     } catch (error) {
@@ -209,17 +169,16 @@ export function useChat(sessionId?: string) {
     updates: Partial<Session>
   ) => {
     try {
-      const { error } = await supabase
-        .from('sessions')
-        .update({
-          ...updates,
-          last_accessed_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-      if (error) throw error;
+      if (userError) throw userError;
+      if (!user) {
+        router.push('/sign-in');
+        return;
+      }
+
+      await sessionsDAL.update(sessionId, user.id, updates);
       
-      // If archiving, redirect to home
       if (updates.status === 'archived') {
         router.push('/');
       }
