@@ -8,12 +8,26 @@ import type { Message, Session, MessageType } from "@/lib/types";
 import { sessionsDAL } from "@/lib/db/sessions";
 import { messagesDAL } from "@/lib/db/messages";
 import type { CreateMessageInput } from "@/lib/db/messages";
+import { handleError, getUserFriendlyErrorMessage } from "@/lib/utils/error-handler";
+import { useLoadingState } from "@/lib/hooks/use-loading-state";
+
+type LoadingStates = {
+  initialLoad: boolean;
+  sendMessage: boolean;
+  createSession: boolean;
+  updateSession: boolean;
+};
 
 export function useChat(sessionId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId || null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isLoading, withLoading } = useLoadingState<LoadingStates>({
+    initialLoad: true,
+    sendMessage: false,
+    createSession: false,
+    updateSession: false
+  });
   const { toast } = useToast();
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -27,10 +41,11 @@ export function useChat(sessionId?: string) {
         const messages = await messagesDAL.list(currentSessionId);
         setMessages(messages);
       } catch (error) {
-        console.error('Error fetching messages:', error);
+        const appError = handleError(error);
+        console.error('Error fetching messages:', appError);
         toast({
           title: "Error",
-          description: "Failed to load messages",
+          description: getUserFriendlyErrorMessage(appError),
           variant: "destructive",
         });
       }
@@ -72,18 +87,17 @@ export function useChat(sessionId?: string) {
         const sessions = await sessionsDAL.list(user.id);
         setSessions(sessions);
       } catch (error) {
-        console.error('Error fetching sessions:', error);
+        const appError = handleError(error);
+        console.error('Error fetching sessions:', appError);
         toast({
           title: "Error",
-          description: "Failed to load sessions",
+          description: getUserFriendlyErrorMessage(appError),
           variant: "destructive",
         });
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    fetchSessions();
+    withLoading('initialLoad', fetchSessions);
 
     const channel = supabase
       .channel('sessions')
@@ -99,7 +113,7 @@ export function useChat(sessionId?: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, router, toast]);
+  }, [supabase, router, toast, withLoading]);
 
   const sendMessage = useCallback(async (
     content: string,
@@ -108,89 +122,117 @@ export function useChat(sessionId?: string) {
   ) => {
     if (!currentSessionId) return;
 
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+    let tempMessageId: string | undefined;
 
-      if (userError) throw userError;
-      if (!user) {
-        router.push('/sign-in');
-        return;
+    await withLoading('sendMessage', async () => {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+        if (!user) {
+          router.push('/sign-in');
+          return;
+        }
+
+        // Create optimistic message
+        tempMessageId = crypto.randomUUID();
+        const optimisticMessage: Message = {
+          id: tempMessageId,
+          session_id: currentSessionId,
+          user_id: user.id,
+          content,
+          type,
+          sequence_number: messages.length + 1,
+          created_at: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, optimisticMessage]);
+
+        await messagesDAL.create(currentSessionId, user.id, {
+          content,
+          type,
+          feedback
+        });
+      } catch (error) {
+        const appError = handleError(error);
+        console.error('Error sending message:', appError);
+        toast({
+          title: "Error",
+          description: getUserFriendlyErrorMessage(appError),
+          variant: "destructive",
+        });
+        // Revert optimistic update on error
+        if (tempMessageId) {
+          setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+        }
       }
-
-      await messagesDAL.create(currentSessionId, user.id, {
-        content,
-        type,
-        feedback
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      });
-    }
-  }, [currentSessionId, supabase, router, toast]);
+    });
+  }, [currentSessionId, messages.length, supabase, router, toast, withLoading]);
 
   const createSession = useCallback(async (language?: Session['language'], level?: Session['level']) => {
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+    return withLoading('createSession', async () => {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-      if (userError) throw userError;
-      if (!user) {
-        router.push('/sign-in');
-        return;
+        if (userError) throw userError;
+        if (!user) {
+          router.push('/sign-in');
+          return;
+        }
+
+        const session = await sessionsDAL.create(user.id, {
+          language: language || 'en',
+          level: level || 'beginner',
+          title: 'New Chat Session',
+          status: 'active'
+        });
+
+        setSessions(prev => [session, ...prev]);
+        setCurrentSessionId(session.id);
+        
+        router.push(`/c/${session.id}`);
+        return session.id;
+      } catch (error) {
+        const appError = handleError(error);
+        console.error('Error creating session:', appError);
+        toast({
+          title: "Error",
+          description: getUserFriendlyErrorMessage(appError),
+          variant: "destructive",
+        });
       }
-
-      const session = await sessionsDAL.create(user.id, {
-        language: language || 'en',
-        level: level || 'beginner',
-        title: 'New Chat Session',
-        status: 'active'
-      });
-
-      setSessions(prev => [session, ...prev]);
-      setCurrentSessionId(session.id);
-      
-      router.push(`/c/${session.id}`);
-      return session.id;
-    } catch (error) {
-      console.error('Error creating session:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create new chat session",
-        variant: "destructive",
-      });
-    }
-  }, [supabase, router, toast]);
+    });
+  }, [supabase, router, toast, withLoading]);
 
   const updateSession = useCallback(async (
     sessionId: string,
     updates: Partial<Session>
   ) => {
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+    return withLoading('updateSession', async () => {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-      if (userError) throw userError;
-      if (!user) {
-        router.push('/sign-in');
-        return;
-      }
+        if (userError) throw userError;
+        if (!user) {
+          router.push('/sign-in');
+          return;
+        }
 
-      await sessionsDAL.update(sessionId, user.id, updates);
-      
-      if (updates.status === 'archived') {
-        router.push('/');
+        await sessionsDAL.update(sessionId, user.id, updates);
+        
+        if (updates.status === 'archived') {
+          router.push('/');
+        }
+      } catch (error) {
+        const appError = handleError(error);
+        console.error('Error updating session:', appError);
+        toast({
+          title: "Error",
+          description: getUserFriendlyErrorMessage(appError),
+          variant: "destructive",
+        });
       }
-    } catch (error) {
-      console.error('Error updating session:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update chat session",
-        variant: "destructive",
-      });
-    }
-  }, [supabase, router, toast]);
+    });
+  }, [supabase, router, toast, withLoading]);
 
   return {
     messages,

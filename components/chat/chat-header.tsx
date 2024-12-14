@@ -1,105 +1,87 @@
 "use client";
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useRouter } from 'next/navigation';
-import { Database } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Session } from "@/lib/types";
+import { Archive, Globe, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/components/ui/use-toast";
-import { useChat } from "@/lib/hooks/use-chat";
-
-type Session = Database['public']['Tables']['sessions']['Row'];
+import { cn } from "@/lib/utils";
 
 interface ChatHeaderProps {
-  sessionId: string;
-  onUpdateSession: (sessionId: string, updates: Partial<Session>) => void;
+  session: Session;
+  onArchive?: () => void;
+  className?: string;
 }
 
-export function ChatHeader({ sessionId, onUpdateSession }: ChatHeaderProps) {
-  const router = useRouter();
-  const { toast } = useToast();
-  const supabase = createClientComponentClient<Database>();
-  const { createSession } = useChat();
+const languageNames: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+};
 
-  const handleSignOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      router.push('/sign-in');
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to sign out",
-        variant: "destructive",
-      });
-    }
-  };
+const levelNames: Record<string, string> = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+};
 
-  const handleArchiveChat = async () => {
-    try {
-      await onUpdateSession(sessionId, { status: 'archived' });
-      router.push('/');
-      router.refresh();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to archive chat",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleNewChat = async () => {
-    try {
-      // Create a new session with default values
-      const newSessionId = await createSession('en', 'beginner');
-      if (newSessionId) {
-        router.refresh();
-        router.push(`/c/${newSessionId}`);
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create new chat",
-        variant: "destructive",
-      });
-    }
-  };
-
+export function ChatHeader({ session, onArchive, className }: ChatHeaderProps) {
   return (
-    <header className="border-b p-4 bg-background">
-      <div className="flex items-center justify-between max-w-screen-xl mx-auto">
-        <h1 className="text-lg font-semibold">Language Learning Chat</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNewChat}
+    <header 
+      className={cn(
+        "flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        className
+      )}
+      role="banner"
+    >
+      <div className="flex items-center gap-4">
+        <div>
+          <h1 
+            className="text-lg font-semibold leading-none tracking-tight"
+            aria-label={`Chat session: ${session.title}`}
           >
-            New Chat
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                Menu
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleArchiveChat}>
-                Archive Chat
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleSignOut}>
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {session.title}
+          </h1>
+          <div 
+            className="flex items-center gap-2 mt-1"
+            aria-label={`Language: ${languageNames[session.language]}, Level: ${levelNames[session.level]}`}
+          >
+            <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <span className="text-sm text-muted-foreground">
+              {languageNames[session.language]} · {levelNames[session.level]}
+            </span>
+          </div>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              aria-label="Session settings"
+            >
+              <Settings className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {onArchive && (
+              <DropdownMenuItem
+                onClick={onArchive}
+                className="text-destructive focus:text-destructive"
+              >
+                <Archive className="h-4 w-4 mr-2" aria-hidden="true" />
+                Archive Session
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
