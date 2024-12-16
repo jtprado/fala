@@ -54,6 +54,20 @@ CREATE TABLE public.message_feedback (
     updated_at timestamptz DEFAULT now()
 );
 
+-- Create onboardnig table
+CREATE TABLE public.onboarding_sessions (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id uuid NOT NULL,
+  practice_language text NOT NULL,
+  reason text NOT NULL,
+  topics text[] NOT NULL,
+  level text NOT NULL,
+  improvement_areas text[] NOT NULL,
+  practice_frequency text NOT NULL,
+  completed_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+
 -- Create sequence number trigger
 CREATE OR REPLACE FUNCTION update_sequence_number()
 RETURNS trigger AS $$
@@ -115,6 +129,7 @@ CREATE INDEX messages_content_search_idx ON public.messages USING gin(to_tsvecto
 CREATE INDEX message_feedback_message_id_idx ON public.message_feedback(message_id);
 CREATE INDEX message_feedback_created_at_idx ON public.message_feedback(created_at);
 CREATE UNIQUE INDEX session_stats_user_status_idx ON public.session_stats(user_id, status);
+CREATE INDEX onboarding_sessions_session_id_idx ON public.onboarding_sessions(session_id);
 
 -- Enable RLS
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
