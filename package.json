@@ -76,6 +76,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "supabase": "^1.226.3"
+    "supabase": "^1.226.4"
   }
 }
