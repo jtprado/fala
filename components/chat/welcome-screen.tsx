@@ -17,18 +17,18 @@ const LANGUAGES = {
   es: "Spanish",
   fr: "French",
   de: "German",
-} as const;
+};
 
 const LEVELS = {
   beginner: "Beginner",
   intermediate: "Intermediate",
   advanced: "Advanced",
-} as const;
+};
 
 export function WelcomeScreen() {
   const { createSession } = useChat();
-  const [language, setLanguage] = useState<keyof typeof LANGUAGES>("en");
-  const [level, setLevel] = useState<keyof typeof LEVELS>("beginner");
+  const [language, setLanguage] = useState<'en' | 'es' | 'fr' | 'de'>('en');
+  const [level, setLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -64,39 +64,25 @@ export function WelcomeScreen() {
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Language</label>
-            <Select
-              value={language}
-              onValueChange={(value: keyof typeof LANGUAGES) => setLanguage(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select language" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(LANGUAGES).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+            <Select value={language} onValueChange={(value) =>
+              setLanguage(value as 'en' | 'es' | 'fr' | 'de')}>
+              {Object.entries(LANGUAGES).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </Select>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Level</label>
-            <Select
-              value={level}
-              onValueChange={(value: keyof typeof LEVELS) => setLevel(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select level" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(LEVELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+            <Select value={level} onValueChange={(value) =>
+              setLevel(value as 'beginner' | 'intermediate' | 'advanced')}>
+              {Object.entries(LEVELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </Select>
           </div>
 

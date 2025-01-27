@@ -3,30 +3,29 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ChatInterface } from '@/components/chat/chat-interface';
 
-export const dynamic = 'force-dynamic';
-
 interface ChatPageProps {
-  params: {
-    sessionId: string;
-  };
+  params: { sessionId: string };
 }
 
 export default async function ChatPage({ params }: ChatPageProps) {
+  // Just pass `cookies` directly
   const supabase = createServerComponentClient({ cookies });
-  const sessionId = params.sessionId;
+  const { sessionId } = params; // Destructure directly
 
   if (!sessionId) {
     redirect('/');
   }
-  
-  // Use getUser instead of getSession for security
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
+
+  // Retrieve the user
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
   if (userError || !user) {
     redirect('/sign-in');
   }
 
-  // Verify the chat session exists and belongs to the user
   const { data: chatSession, error: sessionError } = await supabase
     .from('sessions')
     .select('*')

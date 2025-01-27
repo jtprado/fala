@@ -6,7 +6,8 @@ import { WelcomeScreen } from "@/components/chat/welcome-screen";
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const supabase = createServerComponentClient({ cookies });
+  const cookieStore = cookies();
+  const supabase = createServerComponentClient({ cookies: () => cookieStore });
   
   // Use getUser instead of getSession for security
   const { data: { user }, error: userError } = await supabase.auth.getUser();
